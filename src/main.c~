@@ -1,0 +1,200 @@
+#include "main.h"
+
+Mat4 M, V, P, VP;
+float mouseX, mouseY, delta_t, cameraX, cameraY, zoomRatio, last_time, time_scale;
+Shader *current_shader, *default_shader;
+Mesh *default_mesh;
+Object *monkey_obj, *objects[MAX_OBJECTS];
+int num_objects, camera_type;
+
+int main(int argc, char **argv){
+	
+	GLFWwindow *window;
+	Shader *shader;
+	GLuint tex;
+	int i, j;
+	Mesh *platform_mesh, *monkey_mesh;
+	Object *platform_obj[5][5];
+
+	window=initGLFW();
+	initGL();
+	initGLEW();
+
+	mouseX=0;mouseY=0;
+	cameraX=0;cameraY=0;
+	zoomRatio=1;
+	time_scale=1;
+	current_shader=NULL;
+	camera_type=2;
+
+	default_shader=Shader_create("./res/shader.vs", "./res/shader.fs");
+	default_mesh=Mesh_create("./res/monkey.mesh");
+	monkey_mesh=Mesh_create("./res/monkey.mesh");
+	platform_mesh=Mesh_create("./res/platform.mesh");
+	monkey_mesh=Mesh_create("./res/monkey.mesh");
+	tex=Texture_load("./res/rainbow.png");
+	monkey_obj=Object_create();
+	Object_attachMesh(monkey_obj, monkey_mesh);
+	monkey_obj->model=GLM_scaleMat4(0.7, 0.8, -0.7);
+	objects[num_objects++]=monkey_obj;
+	for(i=0;i<10;i++)
+		for(j=0;j<10;j++){
+			platform_obj[i][j]=Object_create();
+			
+			platform_obj[i][j]->pos=GLM_createVec3(i, 0, -j);
+			Object_attachMesh(platform_obj[i][j], platform_mesh);
+			objects[num_objects++]=platform_obj[i][j];
+		}
+
+	P=GLM_orthoMat4(8, 4.5, -10, 10);
+	V=GLM_viewMat4(GLM_createVec3(0, 2, -2), GLM_createVec3(0, 1, -1), GLM_createVec3(0, 1, 1));
+	VP=GLM_mulMat4Mat4(P, V);
+	
+	/* game loop */
+	last_time=glfwGetTime();
+	while(!glfwWindowShouldClose(window)){
+		
+		/* time difference since last frame */
+		delta_t=-last_time;
+		last_time=glfwGetTime();
+		delta_t+=last_time;
+		delta_t*=time_scale;
+
+		glfwPollEvents();
+
+		/* adjust camera */
+		switch(camera_type){
+		case 1:
+			/* adventurer view */
+			V=GLM_viewMat4(GLM_addVec3(monkey_obj->pos, GLM_createVec3(1, 0.8, 0)), GLM_createVec3(0, 0, 1), GLM_createVec3(0, 1, 0));
+			break;
+		case 2:
+			V=GLM_viewMat4(GLM_addVec3(monkey_obj->pos, GLM_createVec3(-0.5, 1.2, 0)), GLM_createVec3(0, 1, 1), GLM_createVec3(0, 1, 0));			
+			/* follow cam */
+			break;
+		case 3:
+			/* tower view */
+			break;
+ 		case 4:
+			/* top view */
+			break;
+		case 5:
+			/* Heli cam */
+			break;
+		}
+		VP=GLM_mulMat4Mat4(P, V);
+		
+		draw();
+		glfwSwapBuffers(window);
+	}
+
+	printf("\n\n\nTHIS MUST NOT PRINT!!!\n");
+	return 0;
+}
+
+void draw(void){
+	int i;
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	for(i=0;i<num_objects;i++)
+		Object_render(objects[i]);
+}
+
+GLFWwindow* initGLFW (void){
+	GLFWwindow* window; // window desciptor/handle
+	
+	glfwSetErrorCallback(error_callback);
+	if (!glfwInit()) {
+		exit(EXIT_FAILURE);
+	}
+	glfwWindowHint(GLFW_SAMPLES, AA_LEVEL);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+	
+	window = glfwCreateWindow(WIDTH, HEIGHT, GAME_NAME, NULL, NULL);
+	
+	if (!window) {
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
+
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
+	
+	glfwSetWindowCloseCallback(window, quit);
+	glfwSetCursorPosCallback(window, cursor_position_callback);
+	glfwSetScrollCallback(window, mouse_scroll_callback);
+	glfwSetMouseButtonCallback(window, mouse_press_callback);
+	glfwSetKeyCallback(window, key_callback);
+
+	return window;
+}
+
+void initGL(void){
+        // Background color of the scene
+        glClearColor(0.3f, 0.3f, 0.7f, 0.0f); // R, G, B, A
+        glClearDepth(1.0f);
+	
+	/* Enable occulision culling  */
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+	glDepthRange(1,-1);
+	
+	/* print OpenGL info  */
+        printf("VENDOR:\t%s\n",glGetString(GL_VENDOR));
+        printf("RENDERER:\t%s\n",glGetString(GL_RENDERER));
+        printf("VERSION:\t%s\n",glGetString(GL_VERSION));
+        printf("GLSL:\t%s\n",glGetString(GL_SHADING_LANGUAGE_VERSION));
+}
+
+void initGLEW(void){
+        glewExperimental = GL_TRUE;
+        if(glewInit()!=GLEW_OK){
+                fprintf(stderr,"Glew failed to initialize : %s\n", glewGetErrorString(glewInit()));
+        }
+        if(!GLEW_VERSION_3_3)
+		fprintf(stderr, "3.3 version not available\n");
+}
+
+void error_callback(int error, const char* description){
+	fprintf(stderr, "Error No. %d : %s\n", error, description);
+}
+
+void quit(GLFWwindow *window){
+	glfwDestroyWindow(window);
+	glfwTerminate();
+	exit(EXIT_SUCCESS);
+}
+
+void cursor_position_callback(GLFWwindow *window, double xpos, double ypos){
+	float normX, normY;
+	normX=(float)((16.0/WIDTH)*(xpos-WIDTH/2.0));
+	normY=-(float)((9.0/HEIGHT)*(ypos-HEIGHT/2.0));
+	normX/=zoomRatio;normY/=zoomRatio;
+	mouseX=normX+cameraX;
+	mouseY=normY+cameraY;
+}
+
+void mouse_scroll_callback(GLFWwindow *window, double xoff, double yoff){
+	return ;
+}
+
+void mouse_press_callback(GLFWwindow *window, int button, int action, int mods){
+	return ;
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
+	switch(key){
+	case GLFW_KEY_1:
+		camera_type=1;
+		break;
+	case GLFW_KEY_2:
+		camera_type=2;
+		break;
+	}
+	return ;
+}
+
